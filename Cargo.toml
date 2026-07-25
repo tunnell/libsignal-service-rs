@@ -48,18 +48,37 @@ url = { version = "2.1", features = ["serde"] }
 uuid = { version = "1", features = ["serde"] }
 
 # http
-reqwest = { version = "0.12", default-features = false, features = [
-  "json",
-  "multipart",
-  "rustls-tls-manual-roots",
-  "stream",
-] }
-reqwest-websocket = { version = "0.4.2", features = ["json"] }
+# Stage 6.1: add explicit `http` dep for the type-only Method/StatusCode/header
+# references that used to flow through reqwest's re-exports. Same crate either
+# way — `reqwest::Method` and `http::Method` are literally the same type.
+http = "1"
+# Stage 6.1 phase 3b: reqwest + reqwest-websocket removed. Replaced by the
+# transport::HttpClient trait + RequestBuilder / HttpResponse types defined
+# in src/transport.rs; impl provided by xous-net-bridge::SyncHttpClient.
 
 tracing = { version = "0.1", features = ["log"] }
 tracing-futures = "0.2"
 
-tokio = { version = "1.0", features = ["macros"] }
+# Stage 6.5 verification (2026-05-06): tokio was previously declared
+# here as a normal dep — left over from upstream's `#[tokio::test]`
+# annotations on async tests. After the Stage 6 transport replacement
+# every src/ file mentioning `tokio` does so only in comments
+# (transport.rs:326, websocket/mod.rs:233, push_service/mod.rs:141).
+# Dropping the normal dep saves ~300 KB of dep-graph size and removes
+# the only Stage 6.5 cargo-tree match for the C-runtime regex; see
+# stage/REPORT-6.5.md.
+
+# Stage 6.1: replaces tokio::time::interval_at in src/websocket/mod.rs.
+# futures-timer is sync at the leaf (single OS-thread parker) but
+# integrates with futures::select! the same way tokio's Interval does.
+futures-timer = { git = "https://github.com/async-rs/futures-timer", rev = "07dbe53" }
+
+# Stage 6.1 phase 3c: async-channel for the WebSocket frame channels in
+# transport::WebSocketChannels. The WS pump impl in xous-net-bridge runs
+# on a sync worker thread; async-channel has both sync (send_blocking /
+# recv_blocking) and async (send / recv) APIs, so the channel pair
+# bridges the sync↔async boundary without an intermediate translation.
+async-channel = { git = "https://github.com/smol-rs/async-channel", rev = "35a63c4" }
 
 [build-dependencies]
 prost-build = "0.14"

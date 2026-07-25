@@ -1,7 +1,7 @@
 use base64::prelude::*;
+use http::Method;
 use libsignal_core::{DeviceId, E164};
 use rand::{CryptoRng, Rng};
-use reqwest::Method;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -29,7 +29,7 @@ use crate::proto::sync_message::PniChangeNumber;
 use crate::proto::{DeviceName, SyncMessage};
 use crate::provisioning::{generate_registration_id, ProvisioningSecrets};
 use crate::push_service::{
-    AvatarWrite, HttpAuthOverride, ReqwestExt, DEFAULT_DEVICE_ID,
+    AvatarWrite, HttpAuthOverride, HttpResponseExt, DEFAULT_DEVICE_ID,
 };
 use crate::sender::OutgoingPushMessage;
 use crate::service_address::ServiceIdExt;

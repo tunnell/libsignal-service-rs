@@ -1,4 +1,4 @@
-use reqwest::StatusCode;
+use http::StatusCode;
 
 use crate::proto::WebSocketResponseMessage;
 
@@ -107,35 +107,9 @@ pub(crate) trait SignalServiceResponse {
     fn header(&self, name: &str) -> Option<&str>;
 }
 
-#[async_trait::async_trait]
-impl SignalServiceResponse for reqwest::Response {
-    type Error = reqwest::Error;
-
-    fn status_code(&self) -> StatusCode {
-        self.status()
-    }
-
-    async fn json<U>(self) -> Result<U, Self::Error>
-    where
-        for<'de> U: serde::Deserialize<'de>,
-    {
-        reqwest::Response::json(self).await
-    }
-
-    async fn text(self) -> Result<String, Self::Error> {
-        reqwest::Response::text(self).await
-    }
-
-    fn header(&self, name: &str) -> Option<&str> {
-        self.headers().get(name).and_then(|v| {
-            v.to_str()
-                .inspect_err(|e| {
-                    tracing::warn!(?e, "could not read header as string")
-                })
-                .ok()
-        })
-    }
-}
+// Stage 6.1: SignalServiceResponse impl for reqwest::Response removed.
+// WebSocketResponseMessage and HttpResponse impls are below; those cover
+// every callsite that uses the trait now.
 
 #[async_trait::async_trait]
 impl SignalServiceResponse for WebSocketResponseMessage {
@@ -169,22 +143,52 @@ impl SignalServiceResponse for WebSocketResponseMessage {
     }
 }
 
+// Stage 6.1: ReqwestExt trait + impl removed; HttpResponseExt below
+// is the new shape.
+
+// Stage 6.1: parallel ext-trait for our `HttpResponse` so callers using
+// `.send().await?.service_error_for_status().await?` keep the same shape.
 #[async_trait::async_trait]
-pub(crate) trait ReqwestExt
+pub(crate) trait HttpResponseExt
 where
     Self: Sized,
 {
-    /// convenience error handler to be used in the builder-style API of `reqwest::Response`
     async fn service_error_for_status(
         self,
-    ) -> Result<reqwest::Response, ServiceError>;
+    ) -> Result<crate::transport::HttpResponse, ServiceError>;
 }
 
 #[async_trait::async_trait]
-impl ReqwestExt for reqwest::Response {
+impl HttpResponseExt for crate::transport::HttpResponse {
     async fn service_error_for_status(
         self,
-    ) -> Result<reqwest::Response, ServiceError> {
+    ) -> Result<crate::transport::HttpResponse, ServiceError> {
         service_error_for_status(self).await
+    }
+}
+
+// Implement SignalServiceResponse for our HttpResponse so the generic
+// `service_error_for_status<R>` function works on it.
+#[async_trait::async_trait]
+impl SignalServiceResponse for crate::transport::HttpResponse {
+    type Error = crate::transport::HttpError;
+
+    fn status_code(&self) -> StatusCode {
+        self.status
+    }
+
+    async fn json<U>(self) -> Result<U, Self::Error>
+    where
+        for<'de> U: serde::Deserialize<'de>,
+    {
+        crate::transport::HttpResponse::json(self).await
+    }
+
+    async fn text(self) -> Result<String, Self::Error> {
+        crate::transport::HttpResponse::text(self).await
+    }
+
+    fn header(&self, name: &str) -> Option<&str> {
+        self.headers.get(name).and_then(|v| v.to_str().ok())
     }
 }

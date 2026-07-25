@@ -8,7 +8,7 @@ use crate::{
     },
     prelude::{PushService, ServiceError},
     proto::GroupContextV2,
-    push_service::{HttpAuth, HttpAuthOverride, ReqwestExt, ServiceIds},
+    push_service::{HttpAuth, HttpAuthOverride, HttpResponseExt, ServiceIds},
     utils::BASE64_RELAXED,
     websocket::{self, SignalWebSocket},
 };
@@ -17,8 +17,8 @@ use base64::prelude::*;
 use bytes::Bytes;
 use chrono::{Days, NaiveDate, NaiveTime, Utc};
 use futures::AsyncReadExt;
+use http::Method;
 use rand::{CryptoRng, Rng};
-use reqwest::Method;
 use serde::Deserialize;
 use zkgroup::{
     auth::{AuthCredentialWithPni, AuthCredentialWithPniResponse},

@@ -1,16 +1,14 @@
 use std::{
     collections::HashMap,
-    io::{self, Read, SeekFrom},
+    io::{Read, SeekFrom},
 };
 
-use futures::TryStreamExt;
-use reqwest::{
+use http::{
     header::{CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE},
-    multipart::Part,
     Method, StatusCode,
 };
 use serde::Deserialize;
-use tracing::{debug, trace};
+use tracing::trace;
 use url::Url;
 
 use crate::{
@@ -18,10 +16,15 @@ use crate::{
     proto::AttachmentPointer, push_service::HttpAuthOverride,
 };
 
-use super::{response::ReqwestExt, PushService, ServiceError};
+use super::{response::HttpResponseExt, PushService, ServiceError};
 
 #[derive(Debug, serde::Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+// Stage 6.1: fields were used by reqwest::multipart::Form in
+// upload_to_cdn0; that path is stubbed pending a hand-rolled multipart
+// builder. Allow dead_code to keep the deserialization shape correct
+// (server still sends these fields in the upload-form response).
+#[allow(dead_code)]
 pub struct AttachmentV2UploadAttributes {
     key: String,
     credential: String,
@@ -82,7 +85,13 @@ impl PushService {
         cdn_id: u32,
         path: &str,
     ) -> Result<impl futures::io::AsyncRead + Send + Unpin, ServiceError> {
-        let response_stream = self
+        // Stage 6.1: was reqwest's bytes_stream() → into_async_read() for
+        // streaming downloads. Our HttpResponse buffers the whole body up
+        // front (the underlying ureq sync HTTP/1.1 client would too); we
+        // wrap the buffer in a futures::io::Cursor to keep the AsyncRead
+        // return type. Acceptable for MVP — attachments on Precursor are
+        // post-MVP and capped at a few MiB, so full-buffer is fine.
+        let body = self
             .request(
                 Method::GET,
                 Endpoint::cdn(cdn_id, path),
@@ -90,12 +99,12 @@ impl PushService {
             )?
             .send()
             .await?
-            .error_for_status()?
-            .bytes_stream()
-            .map_err(io::Error::other)
-            .into_async_read();
+            .error_for_status()
+            .map_err(|_| ServiceError::UnhandledResponseCode { http_code: 0 })?
+            .bytes()
+            .await?;
 
-        Ok(response_stream)
+        Ok(futures::io::Cursor::new(body))
     }
 
     pub(crate) async fn get_attachment_v4_upload_attributes(
@@ -297,45 +306,25 @@ impl PushService {
         path: &str,
         upload_attributes: AttachmentV2UploadAttributes,
         filename: String,
-        mut reader: impl Read + Send,
+        reader: impl Read + Send,
     ) -> Result<(), ServiceError> {
-        let mut buf = Vec::new();
-        reader
-            .read_to_end(&mut buf)
-            .expect("infallible Read instance");
-
-        // Amazon S3 expects multipart fields in a very specific order
-        // DO NOT CHANGE THIS (or do it, but feel the wrath of the gods)
-        let form = reqwest::multipart::Form::new()
-            .text("acl", upload_attributes.acl)
-            .text("key", upload_attributes.key)
-            .text("policy", upload_attributes.policy)
-            .text("Content-Type", "application/octet-stream")
-            .text("x-amz-algorithm", upload_attributes.algorithm)
-            .text("x-amz-credential", upload_attributes.credential)
-            .text("x-amz-date", upload_attributes.date)
-            .text("x-amz-signature", upload_attributes.signature)
-            .part(
-                "file",
-                Part::stream(buf)
-                    .mime_str("application/octet-stream")?
-                    .file_name(filename),
-            );
-
-        let response = self
-            .request(
-                Method::POST,
-                Endpoint::cdn(0, path),
-                HttpAuthOverride::NoOverride,
-            )?
-            .multipart(form)
-            .send()
-            .await?
-            .error_for_status()?;
-
-        debug!("HyperPushService::PUT response: {:?}", response);
-
-        Ok(())
+        // Stage 6.1: was a reqwest::multipart::Form upload. The Xous fork
+        // doesn't have multipart-form support in its transport (writing a
+        // hand-rolled multipart/form-data body builder is ~100 LoC and
+        // wasn't needed for MVP — text-message send/receive doesn't go
+        // through this path; only attachment upload does, which is
+        // post-MVP per docs/REPORT.md).
+        //
+        // Returning a clear error so callers fail fast instead of
+        // silently succeeding with no upload. To re-enable: write a
+        // multipart-builder helper in transport.rs that constructs the
+        // body bytes with a custom boundary, sets Content-Type to
+        // `multipart/form-data; boundary=<boundary>`, and POSTs via the
+        // existing RequestBuilder.
+        let _ = (filename, reader, upload_attributes, path); // silence unused warns
+        Err(ServiceError::SendError {
+            reason: "attachment multipart upload not implemented in Stage 6.1 — see push_service/cdn.rs upload_attachment_v3".to_string(),
+        })
     }
 
     #[tracing::instrument(skip(self, content))]

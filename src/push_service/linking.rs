@@ -1,5 +1,5 @@
+use http::Method;
 use libsignal_core::DeviceId;
-use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -9,7 +9,8 @@ use crate::{
 };
 
 use super::{
-    response::ReqwestExt, HttpAuth, HttpAuthOverride, PushService, ServiceError,
+    response::HttpResponseExt, HttpAuth, HttpAuthOverride, PushService,
+    ServiceError,
 };
 
 #[derive(Debug, Serialize)]

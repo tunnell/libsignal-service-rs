@@ -181,23 +181,16 @@ pub struct PreKeyState {
 }
 
 pub(crate) const PRE_KEY_MINIMUM: u32 = 10;
-// Upstream uses 100, generated and individually persisted BEFORE the
-// single upload attempt. On slow-flash targets (Precursor: ~2.6s per
-// kyber record) a 100-key batch takes minutes per identity, the
-// websocket rotates before the upload leg runs, and the failed attempt
-// regenerates a fresh batch at higher ids on the next connect — an
-// unbounded generate/persist/fail loop (observed on hardware
-// 2026-07-31: kyber ids 2->177+, 349+ writes). 25 keeps generation
-// inside a socket lifetime while satisfying PRE_KEY_MINIMUM; the
-// fully idempotent re-upload of orphaned batches is tracked upstream
-// (whisperfish/libsignal-service-rs#462).
+// Keys are persisted individually before the single upload. At ~2.6s
+// per kyber record on Precursor flash, upstream's 100 outlives the
+// websocket; the failed upload then regenerates at higher ids on every
+// reconnect. 25 fits inside a socket lifetime and still clears
+// PRE_KEY_MINIMUM. Idempotent re-upload is upstream #462.
 pub(crate) const PRE_KEY_BATCH_SIZE: u32 = 25;
 pub(crate) const PRE_KEY_MEDIUM_MAX_VALUE: u32 = 0xFFFFFF;
 
-/// Yield to the executor once: wake ourselves, return `Pending`, then
-/// `Ready` on the next poll. Used between per-key persistence writes so
-/// websocket keepalives and queued user traffic get serviced during a
-/// replenish on slow-flash targets (each write blocks ~seconds there).
+/// Yield once, self-waking. Lets keepalives and user traffic run
+/// between per-key writes, which block for seconds on slow flash.
 fn yield_now() -> impl std::future::Future<Output = ()> {
     let mut yielded = false;
     std::future::poll_fn(move |cx| {

@@ -83,6 +83,10 @@ pub struct DeviceCapabilities {
     pub attachment_backfill: bool,
     #[serde(default)]
     pub spqr: bool,
+    #[serde(default, rename = "profiles_v2")]
+    pub profiles_v2: bool,
+    #[serde(default)]
+    pub username_change_sync_message: bool,
 }
 
 impl Default for DeviceCapabilities {
@@ -92,6 +96,8 @@ impl Default for DeviceCapabilities {
             transfer: false,
             attachment_backfill: false,
             spqr: true,
+            profiles_v2: false,
+            username_change_sync_message: false,
         }
     }
 }

@@ -26,29 +26,29 @@ pub struct LinkAccountAttributes {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkCapabilities {
-    pub delete_sync: bool,
-    pub versioned_expiration_timer: bool,
-    /// It is currently unclear what this field is.
-    ///
-    /// Signal Server refers to the field as `STORAGE_SERVICE_RECORD_KEY_ROTATION` [here](https://github.com/signalapp/Signal-Server/blob/5cc76f48aa4028f5001a51409a3a0e4e6ce2d7f2/service/src/main/java/org/whispersystems/textsecuregcm/storage/DeviceCapability.java#L15).
-    /// Signal Android refers to the field as `storageServiceEncryptionV2` [here](https://github.com/signalapp/Signal-Android/blob/ec840726fcbb5440e1337274f791d17a6fe59598/libsignal-service/src/main/java/org/whispersystems/signalservice/api/account/AccountAttributes.kt#L60).
-    /// It is therefore possibly related to backup
-    pub ssre2: bool,
+    /// `ATTACHMENT_BACKFILL` on Signal Server.
+    pub attachment_backfill: bool,
     /// Sparse Post-Quantum Ratchet (`SPARSE_POST_QUANTUM_RATCHET` on Signal Server).
     ///
     /// Required for all devices; the server returns 409 if a linking device omits this capability
     /// while the account already has it on any existing device.
     pub spqr: bool,
+    /// `USERNAME_CHANGE_SYNC_MESSAGE` on Signal Server, flagged preventDowngrade —
+    /// omitting it while the account's primary already advertises it makes
+    /// PUT /v1/devices/link fail with HTTP 409 (observed on hardware 2026-07-31).
+    pub username_change_sync_message: bool,
 }
 
-// https://github.com/signalapp/Signal-Desktop/blob/1e57db6aa4786dcddc944349e4894333ac2ffc9e/ts/textsecure/WebAPI.ts#L1287
+// Mirrors upstream whisperfish/libsignal-service-rs fd48165 ("Update link
+// capabilities", 2026-07-05), which tracks Signal-Desktop. The former
+// delete_sync / versioned_expiration_timer / ssre2 capability names are
+// retired server-side.
 impl Default for LinkCapabilities {
     fn default() -> Self {
         Self {
-            delete_sync: true,
-            versioned_expiration_timer: true,
-            ssre2: true,
+            attachment_backfill: false,
             spqr: true,
+            username_change_sync_message: true,
         }
     }
 }

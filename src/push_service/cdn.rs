@@ -99,8 +99,11 @@ impl PushService {
             )?
             .send()
             .await?
-            .error_for_status()
-            .map_err(|_| ServiceError::UnhandledResponseCode { http_code: 0 })?
+            // dc0720a reshaped UnhandledResponseCode to { status, body };
+            // route the non-2xx case through HttpTransport (#[from]
+            // HttpError) instead of hand-building the variant with a
+            // placeholder code.
+            .error_for_status()?
             .bytes()
             .await?;
 

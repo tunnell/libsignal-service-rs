@@ -3,7 +3,7 @@ use libsignal_core::curve::CurveError;
 use libsignal_protocol::{
     FingerprintError, ServiceIdKind, SignalProtocolError,
 };
-use reqwest::StatusCode;
+use http::StatusCode;
 use zkgroup::{ZkGroupDeserializationFailure, ZkGroupVerificationFailure};
 
 use crate::{

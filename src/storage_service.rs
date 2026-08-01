@@ -30,8 +30,8 @@ use base64::Engine;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use prost::Message;
+use http::Method;
 use rand::TryRngCore;
-use reqwest::Method;
 use serde::Deserialize;
 use sha2::Sha256;
 
@@ -42,7 +42,7 @@ use crate::proto::{
     StorageRecord,
 };
 use crate::push_service::protobuf::ProtobufResponseExt;
-use crate::push_service::ReqwestExt;
+use crate::push_service::HttpResponseExt;
 use crate::push_service::{
     HttpAuth, HttpAuthOverride, PushService, ServiceError,
 };
@@ -70,8 +70,10 @@ impl From<prost::DecodeError> for StorageServiceError {
     }
 }
 
-impl From<reqwest::Error> for StorageServiceError {
-    fn from(e: reqwest::Error) -> Self {
+// Upstream converts reqwest::Error here; our transport layer surfaces
+// crate::transport::HttpError instead (ServiceError::HttpTransport).
+impl From<crate::transport::HttpError> for StorageServiceError {
+    fn from(e: crate::transport::HttpError) -> Self {
         StorageServiceError::Service(e.into())
     }
 }

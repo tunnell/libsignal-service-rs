@@ -218,7 +218,7 @@ where
         }
 
         if destination_service_id.kind() == ServiceIdKind::Pni
-            && envelope.source_service_id.is_none()
+            && envelope.parse_source_service_id().is_none()
         {
             tracing::warn!("received sealed sender message to our PNI; ignoring invalid message");
             return Err(ServiceError::InvalidFrame {
@@ -394,7 +394,10 @@ where
                     );
                 };
 
-                let needs_receipt = if envelope.source_service_id.is_some() {
+                let needs_receipt = if envelope
+                    .parse_source_service_id()
+                    .is_some()
+                {
                     tracing::warn!(?envelope, "Received an unidentified delivery over an identified channel.  Marking needs_receipt=false");
                     false
                 } else {
